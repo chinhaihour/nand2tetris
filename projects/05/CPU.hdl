@@ -40,4 +40,88 @@ CHIP CPU {
 
     PARTS:
     // Put your code here:
+
+    // If instruction[15] is 0, it's an A instruction else it's
+    // an C instruction.
+    Not(in=instruction[15], out=aInstruct);
+
+    // load input of the ARegister enables either there's an A instruction
+    // or there's an C instruction and it instructs to load the ALU output to
+    // the ARegsiter
+    And(a=instruction[15], b=instruction[5], out=aluLoadA);
+    Or(a=aInstruct, b=aluLoadA, out=aRegLoad);
+    // If it's an A instruction, input it, otherwise input the ALU out
+    // (note that no value is inputted into the ARegister unless the load input is enabled)
+    Mux16(a=instruction, b=aluOut, sel=instruction[15], out=aRegIn);
+    ARegister(in=aRegIn, load=aRegLoad, out=aRegOut, out[0..14]=addressM);
+
+    And(a=instruction[15], b=instruction[4], out=dRegLoad);
+    DRegister(in=aluOut, load=dRegLoad, out=dRegOut);
+
+    // Use Mux to decide whether to use value from ARegister
+    // or from inM based on the instruction.
+    Mux4Way16(a=aRegOut, b=aRegOut, c=aRegOut, d=inM, sel[0]=instruction[12], sel[1]=instruction[15], out=aluY);
+    And(a=instruction[11], b=instruction[15], out=aluzx);
+    And(a=instruction[10], b=instruction[15], out=alunx);
+    And(a=instruction[9], b=instruction[15], out=aluzy);
+    And(a=instruction[8], b=instruction[15], out=aluny);
+    And(a=instruction[7], b=instruction[15], out=aluf);
+    And(a=instruction[6], b=instruction[15], out=aluno);
+    ALU(x=dRegOut, y=aluY, zx=aluzx, nx=alunx, zy=aluzy, ny=aluny, f=aluf, no=aluno, out=aluOut, out=outM, zr=zr, ng=ng);
+
+    // writeM is based on the opcode and the d3 (destination field)
+    // write M is enabled only when the instruction is a C instruction and
+    // the d3 of the destination field of the instruction is 1.
+    And(a=instruction[3], b=instruction[15], out=writeM);
+
+    // nots of ALU's control bits of the output side
+    Not(in=zr, out=zrNot);
+    Not(in=ng, out=ngNot);
+
+    Not(in=instruction[0], out=notInstruct0);
+    Not(in=instruction[1], out=notInstruct1);
+    Not(in=instruction[2], out=notInstruct2);
+
+    And(a=instruction[0], b=notInstruct1, out=inCheck0);
+    And(a=inCheck0, b=notInstruct2, out=inCheck1);
+    And(a=zrNot, b=ngNot, out=aluCheck0);
+    And(a=inCheck1, b=aluCheck0, out=finalCheck0);
+    And(a=instruction[15], b=finalCheck0, out=greatThanZero);
+
+    And(a=notInstruct0, b=instruction[1], out=inCheck2);
+    And(a=inCheck2, b=notInstruct2, out=inCheck3);
+    And(a=zr, b=true, out=aluCheck1);
+    And(a=inCheck3, b=aluCheck1, out=finalCheck1);
+    And(a=instruction[15], b=finalCheck1, out=equalZero);
+
+    And(a=instruction[0], b=instruction[1], out=inCheck4);
+    And(a=inCheck4, b=notInstruct2, out=inCheck5);
+    Or(a=zr, b=ngNot, out=aluCheck2);
+    And(a=inCheck5, b=aluCheck2, out=finalCheck2);
+    And(a=instruction[15], b=finalCheck2, out=greatOrEqualZero);
+
+    And(a=notInstruct0, b=notInstruct1, out=inCheck6);
+    And(a=inCheck6, b=instruction[2], out=inCheck7);
+    And(a=ng, b=true, out=aluCheck3);
+    And(a=inCheck7, b=aluCheck3, out=finalCheck3);
+    And(a=instruction[15], b=finalCheck3, out=lessThanZero);
+
+    And(a=instruction[0], b=notInstruct1, out=inCheck8);
+    And(a=inCheck8, b=instruction[2], out=inCheck9);
+    And(a=zrNot, b=true, out=aluCheck4);
+    And(a=inCheck9, b=aluCheck4, out=finalCheck4);
+    And(a=instruction[15], b=finalCheck4, out=notEqualZero);
+
+    And(a=notInstruct0, b=instruction[1], out=inCheck10);
+    And(a=inCheck10, b=instruction[2], out=inCheck11);
+    Or(a=zr, b=ng, out=aluCheck5);
+    And(a=inCheck11, b=aluCheck5, out=finalCheck5);
+    And(a=instruction[15], b=finalCheck5, out=lessOrEqualZero);
+
+    And(a=instruction[0], b=instruction[1], out=inCheck12);
+    And(a=inCheck12, b=instruction[2], out=inCheck13);
+    And(a=instruction[15], b=inCheck13, out=uncondJump);
+
+    Or8Way(in[0]=greatThanZero, in[1]=equalZero, in[2]=greatOrEqualZero, in[3]=lessThanZero, in[4]=notEqualZero, in[5]=lessOrEqualZero, in[6]=uncondJump, in[7]=false, out=pcLoad);
+    PC(in=aRegOut, load=pcLoad, inc=true, reset=reset, out[0..14]=pc);
 }
